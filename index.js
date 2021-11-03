@@ -130,12 +130,34 @@ function status(id) {
             }   
             if(res.data.status==="completed"){
                 console.log(res.data.text)
+                // var update=res.data.text
+                // updatefile(update,res)
                 return;
             }
         })
         .catch((err) => console.error(err));
 }
+// async function updatefile(data,res){
+//     mongoClient.connect(process.env.MONGO, (err, client) => {
+//         if (err) {
+//             return err
+//         }
+//         else {
+//             let db = client.db('uploadDB')
+//             let collection = db.collection('files')
+//             try {
+//                 collection.updateOne({}, {$set: {"trancriptions": data}},false,true);
+//                 console.log('File Updated')
+//             }
+//             catch (err) {
+//                 console.log('Error while inserting:', err)
+//             }
+//             res.redirect('/protected')
+//         }
+//     })
+//     await client.close()
 
+// }
 
 mongodb.connect(process.env.MONGO, () => console.log('mongodb connected'))
 // app.use('/', (req, res) => res.send("hello world"))
