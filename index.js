@@ -10,6 +10,8 @@ const fs = require('fs')
 const router = express.Router()
 const binary = mongodb.Binary
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
+const axios = require("axios");
+const path = require('path')
 
 require('./auth');
 dotenv.config()
@@ -44,9 +46,13 @@ app.post('/upload', isLoggedIn, (req, res) => {
     if (req.files) {
         console.log(req.file)
     }
-    var file = { username: req.user.displayName, file: req.files.uploadedFile }
+    var filetosend = req.files.uploadedFile;
+
     //var file = binary(req.files.uploadedFile.data)  
+    transcription(filetosend)
+    var file = { username: req.user.displayName, file: req.files.uploadedFile }
     insertFile(file, res)
+
 })
 async function insertFile(file, res) {
     mongoClient.connect(process.env.MONGO, (err, client) => {
@@ -67,7 +73,6 @@ async function insertFile(file, res) {
         }
     })
     await client.close()
-
 }
 app.get('/logout', (req, res) => {
     req.logout();
@@ -75,20 +80,83 @@ app.get('/logout', (req, res) => {
     res.send('You have been Logged out')
 })
 
+function transcription(filetosend) {
+    const assembly = axios.create({
+        baseURL: "https://api.assemblyai.com/v2",
+        headers: {
+            authorization: process.env.ASSEMBLYAI_API_KEY,
+            "content-type": "application/json",
+            "transfer-encoding": "chunked",
+        },
+    });
+    assembly
+        .post("/upload", filetosend.data)
+        .then((res) => textfile(res.data))
+        .catch((err) => console.error(err));
+}
+function textfile(data) {
+    console.log(data);
+    const assembly = axios.create({
+        baseURL: "https://api.assemblyai.com/v2",
+        headers: {
+            authorization: process.env.ASSEMBLYAI_API_KEY,
+            "content-type": "application/json",
+        },
+    });
+
+    assembly
+        .post(`/transcript`, {
+            audio_url: data.upload_url
+        })
+        .then((res) => { status(res.data.id) })
+        .catch((err) => console.error(err));
+
+}
+function status(id) {
+    const assembly = axios.create({
+        baseURL: "https://api.assemblyai.com/v2",
+        headers: {
+            authorization: process.env.ASSEMBLYAI_API_KEY,
+            "content-type": "application/json",
+        },
+    });
+    assembly
+        .get(`/transcript/${id}`)
+        .then((res) => {
+            if (res.data.status === "processing")
+            {
+                console.log("Please wait!!, processing...")
+                status(id)
+            }   
+            if(res.data.status==="completed"){
+                console.log(res.data.text)
+                return;
+            }
+        })
+        .catch((err) => console.error(err));
+}
+
+
+mongodb.connect(process.env.MONGO, () => console.log('mongodb connected'))
+// app.use('/', (req, res) => res.send("hello world"))
+app.use('/auth', authroute)
+app.listen(process.env.PORT, () => console.log(`server is running ${process.env.PORT}`))
+module.exports = router
+
 
 // replace with your own subscription key,
 // service region (e.g., "westus"), and
 // the name of the file you want to run
 // through the speech recognizer.
-const subscriptionKey = process.env.ID;
-const serviceRegion = process.env.LOCATION; // e.g., "westus"
-const filename="audio.wav";
-const language = "en-US";
+// const subscriptionKey = process.env.ID;
+// const serviceRegion = process.env.LOCATION; // e.g., "westus"
+// const filename="audio.wav";
+// const language = "en-US";
 
 // function openPushStream(filename) {
 //     // create the push stream we need for the speech sdk.
 //     var pushStream = sdk.AudioInputStream.createPushStream();
-  
+
 //     // open the file and push it to the push stream.
 //     fs.createReadStream(filename)
 //       .on("data", function (arrayBuffer) {
@@ -97,10 +165,10 @@ const language = "en-US";
 //       .on("end", function () {
 //         pushStream.close();
 //       });
-  
+
 //     return pushStream;
 //   }
-  
+
 //   var audioConfig = sdk.AudioConfig.fromStreamInput(
 //     openPushStream("audio.wav")
 //   );
@@ -124,20 +192,16 @@ const language = "en-US";
 
 // const fs = require('fs');
 // const sdk = require("microsoft-cognitiveservices-speech-sdk");
-const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey,serviceRegion);
+// const speechConfig = sdk.SpeechConfig.fromSubscription(subscriptionKey,serviceRegion);
 
-function fromFile() {
-    let audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync("audio.wav"));
-    let recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+// function fromFile() {
+//     let audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync("audio.wav"));
+//     let recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
 
-    recognizer.recognizeOnceAsync(result => {
-        console.log(`RECOGNIZED: Text=${result.text}`);
-        recognizer.close();
-    });
-}
-fromFile();
-mongodb.connect(process.env.MONGO, () => console.log('mongodb connected'))
-// app.use('/', (req, res) => res.send("hello world"))
-app.use('/auth', authroute)
-app.listen(process.env.PORT, () => console.log(`server is running ${process.env.PORT}`))
-module.exports = router
+//     recognizer.recognizeOnceAsync(result => {
+//         console.log(`RECOGNIZED: Text=${result.text}`);
+//         recognizer.close();
+//     });
+// }
+// fromFile();
+
