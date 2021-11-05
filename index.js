@@ -13,6 +13,10 @@ const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const axios = require("axios");
 const path = require('path')
 
+var resdata = "no data";
+var username = "no data";
+var file = "no data";
+var insertdata = "no data";
 require('./auth');
 dotenv.config()
 function isLoggedIn(req, res, next) {
@@ -49,12 +53,14 @@ app.post('/upload', isLoggedIn, (req, res) => {
     var filetosend = req.files.uploadedFile;
 
     //var file = binary(req.files.uploadedFile.data)  
+    username = req.user.displayName,
+        file = req.files.uploadedFile
     transcription(filetosend)
-    var file = { username: req.user.displayName, file: req.files.uploadedFile }
-    insertFile(file, res)
+    res.redirect('/protected')
+
 
 })
-async function insertFile(file, res) {
+async function insertFile(file) {
     mongoClient.connect(process.env.MONGO, (err, client) => {
         if (err) {
             return err
@@ -69,7 +75,7 @@ async function insertFile(file, res) {
             catch (err) {
                 console.log('Error while inserting:', err)
             }
-            res.redirect('/protected')
+            // res.redirect('/protected')
         }
     })
     await client.close()
@@ -79,7 +85,6 @@ app.get('/logout', (req, res) => {
     req.session.destroy();
     res.send('You have been Logged out')
 })
-
 function transcription(filetosend) {
     const assembly = axios.create({
         baseURL: "https://api.assemblyai.com/v2",
@@ -123,20 +128,30 @@ function status(id) {
     assembly
         .get(`/transcript/${id}`)
         .then((res) => {
-            if (res.data.status === "processing")
-            {
+            if (res.data.status === "processing") {
                 console.log("Please wait!!, processing...")
                 status(id)
-            }   
-            if(res.data.status==="completed"){
-                console.log(res.data.text)
-                // var update=res.data.text
+            }
+            if (res.data.status === "completed") {
+
+                resdata = res.data.text
+                console.log(resdata)
+                var insertdata = { username: username, file: file, resdata: resdata }
+                insertFile(insertdata)
+
                 // updatefile(update,res)
                 return;
             }
         })
         .catch((err) => console.error(err));
 }
+
+mongodb.connect(process.env.MONGO, () => console.log('mongodb connected'))
+// app.use('/', (req, res) => res.send("hello world"))
+app.use('/auth', authroute)
+app.listen(process.env.PORT, () => console.log(`server is running ${process.env.PORT}`))
+module.exports = router
+
 // async function updatefile(data,res){
 //     mongoClient.connect(process.env.MONGO, (err, client) => {
 //         if (err) {
@@ -158,13 +173,6 @@ function status(id) {
 //     await client.close()
 
 // }
-
-mongodb.connect(process.env.MONGO, () => console.log('mongodb connected'))
-// app.use('/', (req, res) => res.send("hello world"))
-app.use('/auth', authroute)
-app.listen(process.env.PORT, () => console.log(`server is running ${process.env.PORT}`))
-module.exports = router
-
 
 // replace with your own subscription key,
 // service region (e.g., "westus"), and
